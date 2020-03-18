@@ -1,0 +1,13 @@
+local:
+  folder:
+    /xxx/xxx/xxxx
+
+remote:
+  host:
+    xxx.xxx.xxx.xxx
+  username:
+    xxxxx
+  password:
+    xxxxxx
+  dir:
+    /xxx/xxx/xxx/xxx
