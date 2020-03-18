@@ -1,0 +1,2 @@
+# FileScanner
+ Java实现的文件扫描以及上传工具，使用JDK7提供的WatchService服务进行文件夹监控与SFTPClient进行文件上传
