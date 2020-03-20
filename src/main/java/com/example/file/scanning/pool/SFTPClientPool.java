@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 /**
@@ -23,7 +24,7 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 
 public class SFTPClientPool {
     private static final Logger log = LoggerFactory.getLogger(SFTPClientPool.class);
-
+    
     /**
      * 连接池大小 .
      **/
@@ -39,12 +40,15 @@ public class SFTPClientPool {
      **/
     private AtomicIntegerArray states;
 
+    private Semaphore semaphore;
+
     SSHClient sshClient = SSHClientEager.getInstance();
 
     public SFTPClientPool(int poolSize) {
         this.poolSize = poolSize;
         this.connections = new SFTPClient[poolSize];
         this.states = new AtomicIntegerArray(new int[poolSize]);
+        this.semaphore = new Semaphore(poolSize);
         for (int i = 0; i < poolSize; i++) {
             try {
                 connections[i] = sshClient.newSFTPClient();
@@ -65,35 +69,27 @@ public class SFTPClientPool {
 
 
     public SFTPClient take() {
-        for (;;) {
-            for (int i = 0; i < poolSize; i++) {
-                if (states.get(i) == 0) {
-                    if (states.compareAndSet(i, 0, 1)) {
-                        log.info("使用第: {}个SFTP连接进行传输", i);
-                        return connections[i];
-                    }
-                }
-            }
-            // 如果空闲连接为空，当前线程等待
-            synchronized (this) {
-                try {
-                    log.info("暂无可用SFTP连接，线程执行wait()方法");
-                    this.wait();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+        try {
+            semaphore.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        for (int i = 0; i < poolSize; i++) {
+            if (states.get(i) == 0) {
+                if (states.compareAndSet(i, 0, 1)) {
+                    log.info("使用第: {}个SFTP连接进行传输", i);
+                    return connections[i];
                 }
             }
         }
+        return null;
     }
 
     public void free(SFTPClient sftpClient) {
         for (int i = 0; i < poolSize; i++) {
             if (connections[i] == sftpClient) {
                 states.set(i, 0);
-                synchronized (this) {
-                    log.info("释放第: {}个SFTP连接", i);
-                    this.notifyAll();
-                }
+                semaphore.release();
                 break;
             }
         }
